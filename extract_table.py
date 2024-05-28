@@ -3,8 +3,8 @@ import re
 import json
 
 # 定义目录路径
-directory_path = 'Geophysics_200704-202402'
-dst_dir = "Geophysics_200704-202402_table"
+directory_path = 'D:\DDE\Structured_Documentation\data\paper_1000\Geophysics_500_latex'
+dst_dir = "D:\DDE\Structured_Documentation\data\paper_1000\Geophysics_500_latex_table"
 
 # 如果目标目录不存在，则创建它
 if not os.path.exists(dst_dir):
@@ -13,35 +13,41 @@ if not os.path.exists(dst_dir):
 # 初始化一个空字典来存储过滤情况
 data_dict = {}
 
-# 遍历目录中的所有文件和子目录
-for root, dirs, files in os.walk(directory_path):
-    for file in files:
+# 遍历二级目录中的所有文件
+for root in os.listdir(directory_path):
+    files = os.path.join(directory_path, root)
+    for file in os.listdir(files):
         if file.endswith('.tex'):
             # 拼接完整的文件路径
-            file_path = os.path.join(root, file)
+            file_path = os.path.join(files, file)
 
             # 尝试打开文件并读取内容
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     contents = f.readlines()
-            except UnicodeDecodeError as e:
-                print(f"Error decoding file {file_path}: {e}")
+            #except (UnicodeDecodeError, PermissionError) as e:
+                # print(f"Error decoding file {file_path}: {e}")
+            except:
                 continue
 
             # 找到的表数目
             table_nums = 0
             # 过滤后的表数目
             retable_nums = 0
-            # 引用过滤数目
-            site = 0
+            # 文献引用过滤数目
+            cite = 0
+            # 图表引用过滤数目
+            graphic = 0
+            # 交叉引用过滤数目
+            ref = 0
             # 空值过滤数目
             blank = 0
             # 嵌套过滤数目
             nested = 0
 
             # 过滤掉以'%'开头的行
-            content = [line for line in contents if not line.lstrip().startswith('%')]
-            content = ''.join(content)
+            content = [line for line in contents if not line.startswith('%')]
+            content = '\n'.join(content)  # 使用换行符连接行
 
             # 使用正则表达式查找所有tabular段落
             tabular_pattern = re.compile(r'\\begin\{tabular\}.*?\\end\{tabular\}', re.DOTALL)
@@ -52,9 +58,17 @@ for root, dirs, files in os.walk(directory_path):
 
             # 为每个找到的tabular段落创建新的.txt文件
             for index, match in enumerate(tabular_matches):
-                # 如果match中包含"\includegraphics"或"\cite"或"\eps"，则跳过当前循环
-                if "\\includegraphics" in match or "\\cite" in match or "\\eps" in match:
-                    site += 1
+                # 如果match中包含"\includegraphics"，则跳过当前循环
+                if "\\includegraphics" in match:
+                    graphic += 1
+                    continue
+
+                if "\\ref" in match:
+                    ref += 1
+                    continue
+
+                if "\\cite" in match:
+                    cite += 1
                     continue
 
                 if len(re.findall(r'\\begin\{tabular\}', match)) > 1:
@@ -66,15 +80,15 @@ for root, dirs, files in os.walk(directory_path):
                     continue
 
                 # 构造目标子目录的路径
-                relative_subdir = os.path.relpath(root, directory_path)
-                dst_subdir = os.path.join(dst_dir, relative_subdir)
+                dst_subdir = os.path.join(dst_dir, root)
 
                 # 如果目标子目录不存在，则创建它
                 if not os.path.exists(dst_subdir):
                     os.makedirs(dst_subdir)
 
                 # 生成新文件的名称
-                new_file_name = f'{file[:-4]}_table_{index + 1}.txt'
+                # new_file_name = f'{file[:-4]}_table_{index + 1}.txt'
+                new_file_name = f'table_{index + 1}.txt'
                 new_file_path = os.path.join(dst_subdir, new_file_name)
 
                 # 计数
@@ -87,7 +101,9 @@ for root, dirs, files in os.walk(directory_path):
             # 为每个id创建一个包含5个键值对的子字典
             sub_dict = {
                 'pre': table_nums,
-                'site': site,
+                'cite': cite,
+                'ref': ref,
+                'graphic': graphic,
                 'blank': blank,
                 'nested': nested,
                 'pro': retable_nums
@@ -96,10 +112,14 @@ for root, dirs, files in os.walk(directory_path):
             # 将子字典添加到主字典中，以id作为key
             data_dict[root.split('\\')[-1]] = sub_dict
 
-            print(f'Processed file: {file_path}')
+            try:
+                print(f'Processed file: {file_path}')
+            except:
+                continue
 
+print(data_dict)
 # 将字典保存到JSON文件中
-with open(os.path.join(directory_path, 'data_filtering.json'), 'w', encoding='utf-8') as file:
+with open(os.path.join(dst_dir, 'data_filtering.json'), 'w', encoding='utf-8') as file:
     json.dump(data_dict, file, ensure_ascii=False, indent=4)
 
 print('All files processed.')
